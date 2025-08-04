@@ -1,38 +1,38 @@
-from fastapi import APIRouter, HTTPException, status, Body
+from fastapi import APIRouter, HTTPException
 from app.schemas.user_schema import UserCreate, UserResponse
-from app.db import get_mongo_collection
-from bson import ObjectId
-from typing import List
-from datetime import datetime
+from app.db import get_db
+import logging
+from app.utils.exceptions import BadRequestException
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-collection = get_mongo_collection("users")
+@router.post("/", response_model=UserResponse)
+def create_user(user: UserCreate):
+    """
+    Create a new user in the database.
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate = Body(...)):
-    existing = collection.find_one({"email": user.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
-    user_doc = user.dict()
-    user_doc["created_at"] = datetime.utcnow()
-    result = collection.insert_one(user_doc)
-    user_doc["_id"] = result.inserted_id
-    return UserResponse(
-        id=str(result.inserted_id),
-        email=user.email,
-        username=user.username,
-        created_at=user_doc["created_at"]
-    )
+    Args:
+        user (UserCreate): User data including username and email.
 
-@router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: str):
-    user = collection.find_one({"_id": ObjectId(user_id)})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return UserResponse(
-        id=str(user["_id"]),
-        email=user["email"],
-        username=user["username"],
-        created_at=user["created_at"]
-    )
+    Returns:
+        UserResponse: User data including generated id.
+
+    Raises:
+        BadRequestException: If the provided data is invalid.
+        HTTPException: If an error occurs while inserting the user.
+    """
+    db = get_db()
+    # Basic validation example
+    if not user.username or not user.email:
+        raise BadRequestException(detail="Username and email must be provided.")
+    try:
+        new_user = user.dict()
+        result = db["users"].insert_one(new_user)
+        new_user["id"] = str(result.inserted_id)
+        return UserResponse(**new_user)
+    except BadRequestException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while creating user")

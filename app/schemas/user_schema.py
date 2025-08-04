@@ -1,12 +1,20 @@
 from pydantic import BaseModel, EmailStr
-from datetime import datetime
-
 class UserCreate(BaseModel):
-    email: EmailStr
-    username: str
+    """
+    Schema for creating a new user.
 
-class UserResponse(BaseModel):
-    id: str
-    email: EmailStr
+    Attributes:
+        username (str): The username of the user.
+        email (EmailStr): The email address of the user.
+    """
     username: str
-    created_at: datetime
+    email: EmailStr
+
+class UserResponse(UserCreate):
+    """
+    Schema for responding with user data including the assigned user ID.
+
+    Attributes:
+        id (str): Unique identifier for the user.
+    """
+    id: str

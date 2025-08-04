@@ -1,49 +1,62 @@
-from fastapi import APIRouter, HTTPException, status, Body
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from app.schemas.task_schema import TaskCreate, TaskResponse
-from app.services.scraping_service import scrape_product_data
-from app.db import get_mongo_collection
-from bson import ObjectId
-from datetime import datetime
-import asyncio
+from app.services.scraping_service import scrape_product_task
+from app.db import get_db
 import logging
-import time
+from app.utils.exceptions import BadRequestException, ConflictException
 
 router = APIRouter()
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-tasks_collection = get_mongo_collection("tasks")
+@router.post("/scrape/", response_model=TaskResponse)
+def start_scraping(task: TaskCreate, background_tasks: BackgroundTasks):
+    """
+    Start a background scraping task for a given Walmart product URL.
 
-@router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_scraping_task(task: TaskCreate = Body(...)):
-    logging.info(f"Scraping task received for URL: {task.url}")
+    Args:
+        task (TaskCreate): Contains the product URL and task creation timestamp.
+        background_tasks (BackgroundTasks): FastAPI background task manager.
+
+    Returns:
+        TaskResponse: Task details including ID, status, and timestamps.
+
+    Raises:
+        BadRequestException: If required fields are missing or invalid.
+        ConflictException: If a similar pending task already exists.
+        HTTPException: If task creation or database operation fails.
+    """
+    db = get_db()
+
+    # Validate input
+    if not task.product_url or not task.product_url.startswith("http"):
+        raise BadRequestException(detail="Invalid or missing product URL.")
 
     try:
-        start_time = time.time()
-        # Run scraper in a thread with timeout
-        scraped_data = await asyncio.wait_for(
-            asyncio.to_thread(scrape_product_data, task.url),
-            timeout=15.0
-        )
-        logging.info(f"Scraping completed in {time.time() - start_time:.2f}s")
+        # Optional: Check if a pending task for the same URL already exists
+        existing_task = db["tasks"].find_one({
+            "product_url": task.product_url,
+            "status": "pending"
+        })
+        if existing_task:
+            raise ConflictException(detail="A pending scraping task for this product URL already exists.")
 
-        task_doc = {
-            "url": task.url,
-            "scraped_data": scraped_data,
-            "status": "successful",
-            "created_at": datetime.utcnow()
+        # Insert new task as "pending"
+        new_task = {
+            "product_url": task.product_url,
+            "status": "pending",
+            "created_at": task.created_at,
+            "finished_at": None,
         }
-        result = tasks_collection.insert_one(task_doc)
-
-        return TaskResponse(
-            id=str(result.inserted_id),
-            url=task.url,
-            status=task_doc["status"],
-            scraped_data=scraped_data
-        )
-
-    except asyncio.TimeoutError:
-        logging.error("Scraping timed out")
-        raise HTTPException(status_code=504, detail="Scraping timed out")
+        result = db["tasks"].insert_one(new_task)
+        task_id = str(result.inserted_id)
+        background_tasks.add_task(scrape_product_task, task_id, task.product_url)
+        new_task["id"] = task_id
+        return TaskResponse(**new_task)
+    except (BadRequestException, ConflictException):
+        raise
     except Exception as e:
-        logging.exception("Unexpected error during scraping")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Failed to start scraping task: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error when starting scraping task")
+
+
+
