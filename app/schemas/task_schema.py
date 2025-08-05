@@ -1,12 +1,25 @@
-from pydantic import BaseModel, HttpUrl
-from typing import Any
+from pydantic import BaseModel, AnyHttpUrl
 from datetime import datetime
-
 class TaskCreate(BaseModel):
-    url: HttpUrl
+    """
+    Schema for creating a new scraping task.
 
-class TaskResponse(BaseModel):
+    Attributes:
+        product_url (str): The URL of the Walmart product to be scraped.
+        created_at (str): ISO format timestamp when the task is created. Defaults to current UTC time.
+    """
+    product_url: str
+    created_at: str = datetime.utcnow().isoformat()
+
+class TaskResponse(TaskCreate):
+    """
+    Schema for responding with scraping task details including status and completion time.
+
+    Attributes:
+        id (str): Unique identifier for the task.
+        status (str): Current status of the task (e.g., "pending", "successful", "failed").
+        finished_at (str | None): ISO format timestamp when the task finished, or None if not finished.
+    """
     id: str
-    url: HttpUrl
     status: str
-    scraped_data: Any
+    finished_at: str | None = None
