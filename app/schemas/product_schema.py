@@ -1,24 +1,45 @@
-from pydantic import BaseModel, AnyHttpUrl
-class ProductCreate(BaseModel):
+# # File: app/schemas/product_schema.py
+
+# from pydantic import BaseModel
+# from typing import Optional
+# from datetime import datetime
+
+# class Product(BaseModel):
+#     url: str
+#     title: str
+#     price: str
+#     description: Optional[str] = ""
+#     scraped_at: datetime
+
+#     class Config:
+#         orm_mode = True
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+class Product(BaseModel):
     """
-    Schema for requesting product scraping via its URL.
+    Schema representing a scraped product.
 
     Attributes:
-        url (str): The Walmart product URL to scrape.
+        url (str): The URL of the product page.
+        title (str): The title or name of the product.
+        price (str): The price of the product as a string.
+        description (Optional[str]): An optional description of the product. Defaults to an empty string if not provided.
+        scraped_at (datetime): The datetime when the product data was scraped.
     """
+
     url: str
-
-class ProductResponse(ProductCreate):
-    """
-    Schema for responding with detailed product information after scraping.
-
-    Attributes:
-        id (str): Unique identifier for the product record.
-        title (str): The product title/name.
-        price (str): The product price as a string.
-        description (str | None): Optional product description text.
-    """
-    id: str
     title: str
     price: str
-    description: str | None
+    description: Optional[str] = ""
+    scraped_at: datetime
+
+    class Config:
+        """
+        Pydantic configuration for ORM mode.
+
+        Enables compatibility with ORM objects, allowing Pydantic to read data
+        from database models or any class with attributes.
+        """
+        orm_mode = True
