@@ -387,3 +387,4 @@ def scrape_product_task(task_id: str, url: str) -> None:
         )
     except Exception as mongo_err:
         logger.error(f"Update task failure error: {mongo_err}", exc_info=True)
+#new pr
